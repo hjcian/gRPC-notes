@@ -13,8 +13,10 @@ import (
 // LaptopStore is an interface to store laptop
 type LaptopStore interface {
 	Save(laptop *pb.Laptop) error
+	Find(id string) (*pb.Laptop, error)
 }
 
+// InMemoryLaptopStore is a InMemoryLaptopStore with RW lock
 type InMemoryLaptopStore struct {
 	mutex sync.RWMutex
 	data  map[string]*pb.Laptop
@@ -57,4 +59,17 @@ func deepCopy(laptopFrom *pb.Laptop) (*pb.Laptop, error) {
 	}
 
 	return laptopTo, nil
+}
+
+// Find finds a laptop by ID
+func (store *InMemoryLaptopStore) Find(id string) (*pb.Laptop, error) {
+	store.mutex.RLock()
+	defer store.mutex.RUnlock()
+
+	laptop := store.data[id]
+	if laptop == nil {
+		return nil, nil
+	}
+
+	return deepCopy(laptop)
 }

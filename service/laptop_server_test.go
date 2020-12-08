@@ -1,8 +1,10 @@
-package service
+package service_test
 
 import (
 	"context"
 	"testing"
+
+	"github.com/hjcian/grpc-notes/service"
 
 	"github.com/hjcian/grpc-notes/pb"
 	"github.com/hjcian/grpc-notes/sample"
@@ -21,32 +23,32 @@ func TestServerCreateLaptop(t *testing.T) {
 	laptopInvalidID.Id = "invalid-uuid"
 
 	laptopDuplicateID := sample.NewLaptop()
-	storeDuplicateID := NewInMemoryLaptopStore()
+	storeDuplicateID := service.NewInMemoryLaptopStore()
 	err := storeDuplicateID.Save(laptopDuplicateID)
 	require.NoError(t, err)
 
 	testCases := []struct {
 		name   string
 		laptop *pb.Laptop
-		store  LaptopStore
+		store  service.LaptopStore
 		code   codes.Code
 	}{
 		{
 			name:   "success_with_id",
 			laptop: sample.NewLaptop(),
-			store:  NewInMemoryLaptopStore(),
+			store:  service.NewInMemoryLaptopStore(),
 			code:   codes.OK,
 		},
 		{
 			name:   "success_no_id",
 			laptop: laptopNoID,
-			store:  NewInMemoryLaptopStore(),
+			store:  service.NewInMemoryLaptopStore(),
 			code:   codes.OK,
 		},
 		{
 			name:   "failure_invalid_id",
 			laptop: laptopInvalidID,
-			store:  NewInMemoryLaptopStore(),
+			store:  service.NewInMemoryLaptopStore(),
 			code:   codes.InvalidArgument,
 		},
 		{
@@ -65,7 +67,7 @@ func TestServerCreateLaptop(t *testing.T) {
 				Laptop: tc.laptop,
 			}
 
-			server := NewLaptopServer(tc.store)
+			server := service.NewLaptopServer(tc.store)
 
 			res, err := server.CreateLaptop(context.Background(), req)
 
