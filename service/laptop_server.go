@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hjcian/grpc-notes/pb"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -26,7 +25,6 @@ func NewLaptopServer(laptopStore LaptopStore) *LaptopServer {
 func (server *LaptopServer) CreateLaptop(
 	ctx context.Context,
 	req *pb.CreateLaptopRequest,
-	opts ...grpc.CallOption,
 ) (*pb.CreateLaptopResponse, error) {
 	laptop := req.GetLaptop()
 	log.Printf("receive a create-laptop request with id: %s", laptop.Id)
