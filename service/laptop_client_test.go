@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"io"
 	"net"
 	"testing"
 
@@ -79,4 +80,79 @@ func requireSameLaptop(t *testing.T, laptop1 *pb.Laptop, laptop2 *pb.Laptop) {
 	require.NoError(t, err)
 
 	require.Equal(t, json1, json2)
+}
+
+func TestClientSearchLaptop(t *testing.T) {
+	t.Parallel()
+
+	store := service.NewInMemoryLaptopStore()
+
+	expectedIDs := make(map[string]bool)
+
+	for i := 0; i < 6; i++ {
+		laptop := sample.NewLaptop()
+
+		switch i {
+		case 0:
+			// Case 0: unmatched laptop with a too high price.
+			laptop.PriceUsd = 2500
+		case 1:
+			// Case 1: unmatched because it has only 2 cores.
+			laptop.Cpu.NumberCores = 2
+		case 2:
+			// Case 2: doesn’t match because the min frequency is too low.
+			laptop.Cpu.MinGhz = 2.0
+		case 3:
+			// Case 3: doesn’t match since it has only 4 GB of RAM.
+			laptop.Ram = &pb.Memory{Value: 4096, Unit: pb.Memory_MEGABYTE}
+		case 4:
+			// Case 4 + 5: matched.
+			laptop.PriceUsd = 1999
+			laptop.Cpu.NumberCores = 4
+			laptop.Cpu.MinGhz = 2.5
+			laptop.Cpu.MaxGhz = laptop.Cpu.MinGhz + 2.0
+			laptop.Ram = &pb.Memory{Value: 16, Unit: pb.Memory_GIGABYTE}
+			expectedIDs[laptop.Id] = true
+		case 5:
+			// Case 4 + 5: matched.
+			laptop.PriceUsd = 2000
+			laptop.Cpu.NumberCores = 6
+			laptop.Cpu.MinGhz = 2.8
+			laptop.Cpu.MaxGhz = laptop.Cpu.MinGhz + 2.0
+			laptop.Ram = &pb.Memory{Value: 64, Unit: pb.Memory_GIGABYTE}
+			expectedIDs[laptop.Id] = true
+		}
+
+		err := store.Save(laptop)
+		require.NoError(t, err)
+	}
+
+	filter := &pb.Filter{
+		MaxPriceUsd: 2000,
+		MinCpuCores: 4,
+		MinCpuGhz:   2.2,
+		MinRam:      &pb.Memory{Value: 8, Unit: pb.Memory_GIGABYTE},
+	}
+	serverAddress := startTestLaptopServer(t, store)
+	client := newTestLaptopClient(t, serverAddress)
+
+	req := &pb.SearchLaptopRequest{Filter: filter}
+
+	stream, err := client.SearchLaptop(context.Background(), req)
+
+	require.NoError(t, err)
+	found := 0
+
+	for {
+		res, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+
+		require.NoError(t, err)
+		require.Contains(t, expectedIDs, res.GetLaptop().GetId())
+		found += 1
+	}
+
+	require.Equal(t, len(expectedIDs), found)
 }
