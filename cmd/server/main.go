@@ -20,6 +20,7 @@ func main() {
 	grpcServer := grpc.NewServer()
 	lpServer := service.NewLaptopServer(
 		service.NewInMemoryLaptopStore(),
+		service.NewDiskImageStore("img"),
 	)
 	pb.RegisterLaptopServiceServer(grpcServer, lpServer)
 

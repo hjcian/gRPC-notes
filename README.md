@@ -9,9 +9,9 @@
 - Done
   - [Implement unary gRPC API in Go](https://dev.to/techschoolguru/implement-unary-grpc-api-in-go-4cdj)
   - [Implement server-streaming gRPC in Go](https://dev.to/techschoolguru/implement-server-streaming-grpc-in-go-2d0p)
-- In progress
   - [Upload file in chunks with client-streaming gRPC - Go](https://dev.to/techschoolguru/upload-file-in-chunks-with-client-streaming-grpc-golang-4loc)
-
+- In progress
+  - [Implement bidirectional streaming gRPC - Go](https://dev.to/techschoolguru/implement-bidirectional-streaming-grpc-go-4kgn)
 
 ## To be explored
 - [Working with Errors in Go 1.13](https://blog.golang.org/go1.13-errors)

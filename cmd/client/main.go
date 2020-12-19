@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"io"
 	"log"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/hjcian/grpc-notes/pb"
@@ -14,8 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func createLaptop(laptopClient pb.LaptopServiceClient) {
-	laptop := sample.NewLaptop()
+func createLaptop(client pb.LaptopServiceClient, laptop *pb.Laptop) {
 	req := &pb.CreateLaptopRequest{
 		Laptop: laptop,
 	}
@@ -24,7 +26,7 @@ func createLaptop(laptopClient pb.LaptopServiceClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	res, err := laptopClient.CreateLaptop(ctx, req)
+	res, err := client.CreateLaptop(ctx, req)
 	if err != nil {
 		st, ok := status.FromError(err)
 		if ok && st.Code() == codes.AlreadyExists {
@@ -43,7 +45,7 @@ func createLaptop(laptopClient pb.LaptopServiceClient) {
 
 func createLaptopN(laptopClient pb.LaptopServiceClient, n int) {
 	for i := 0; i < n; i++ {
-		createLaptop(laptopClient)
+		createLaptop(laptopClient, sample.NewLaptop())
 	}
 }
 
@@ -84,6 +86,91 @@ func searchLaptop(laptopClient pb.LaptopServiceClient, filter *pb.Filter) {
 	}
 }
 
+func testCreateLaptop(client pb.LaptopServiceClient) {
+	createLaptopN(client, 10)
+}
+
+func testSearchLaptop(client pb.LaptopServiceClient) {
+	filter := &pb.Filter{
+		MaxPriceUsd: 3000,
+		MinCpuCores: 4,
+		MinCpuGhz:   2.5,
+		MinRam: &pb.Memory{
+			Value: 8,
+			Unit:  pb.Memory_GIGABYTE,
+		},
+	}
+	searchLaptop(client, filter)
+}
+
+func uploadImage(client pb.LaptopServiceClient, laptopID string, imagePath string) {
+	file, err := os.Open(imagePath)
+	if err != nil {
+		log.Fatal("cannot open image file: ", err)
+	}
+	defer file.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stream, err := client.UploadImage(ctx)
+	if err != nil {
+		log.Fatal("cannot upload image: ", err)
+	}
+
+	req := &pb.UploadImageRequest{
+		Data: &pb.UploadImageRequest_Info{
+			Info: &pb.ImageInfo{
+				LaptopId:  laptopID,
+				ImageType: filepath.Ext(imagePath),
+			},
+		},
+	}
+
+	err = stream.Send(req)
+	if err != nil {
+		log.Fatal("cannot send image info to server: ", err, stream.RecvMsg(nil))
+	}
+
+	reader := bufio.NewReader(file)
+	buffer := make([]byte, 1024)
+
+	for {
+		n, err := reader.Read(buffer)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal("cannot read chunk to buffer: ", err)
+		}
+
+		req := &pb.UploadImageRequest{
+			Data: &pb.UploadImageRequest_ChunkData{
+				ChunkData: buffer[:n],
+			},
+		}
+
+		err = stream.Send(req)
+		if err != nil {
+			log.Fatal("cannot send chunk to server: ", err, stream.RecvMsg(nil))
+		}
+	}
+
+	res, err := stream.CloseAndRecv()
+	if err != nil {
+		log.Fatal("cannot receive response: ", err)
+	}
+
+	log.Printf("image uploaded with id: %s, size: %d", res.GetId(), res.GetSize())
+
+}
+
+func testUploadImage(client pb.LaptopServiceClient) {
+	laptop := sample.NewLaptop()
+	createLaptop(client, laptop)
+	uploadImage(client, laptop.GetId(), "tmp/laptop.jpeg")
+}
+
 func main() {
 	serverAddr := flag.String("address", "", "the server address")
 	flag.Parse()
@@ -94,18 +181,8 @@ func main() {
 		log.Fatalf("cannot dial server %s: %s", *serverAddr, err)
 	}
 
-	laptopClient := pb.NewLaptopServiceClient(conn)
-	createLaptopN(laptopClient, 10)
-
-	filter := &pb.Filter{
-		MaxPriceUsd: 3000,
-		MinCpuCores: 4,
-		MinCpuGhz:   2.5,
-		MinRam: &pb.Memory{
-			Value: 8,
-			Unit:  pb.Memory_GIGABYTE,
-		},
-	}
-
-	searchLaptop(laptopClient, filter)
+	client := pb.NewLaptopServiceClient(conn)
+	// testCreateLaptop(client)
+	// testSearchLaptop(client)
+	testUploadImage(client)
 }
