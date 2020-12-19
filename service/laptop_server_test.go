@@ -27,43 +27,35 @@ func TestServerCreateLaptop(t *testing.T) {
 	err := storeDuplicateID.Save(laptopDuplicateID)
 	require.NoError(t, err)
 
-	testImageFolder := "../tmp"
-	imageStore := service.NewDiskImageStore(testImageFolder)
-
 	testCases := []struct {
-		name       string
-		laptop     *pb.Laptop
-		store      service.LaptopStore
-		imageStore service.ImageStore
-		code       codes.Code
+		name   string
+		laptop *pb.Laptop
+		store  service.LaptopStore
+		code   codes.Code
 	}{
 		{
-			name:       "success_with_id",
-			laptop:     sample.NewLaptop(),
-			store:      service.NewInMemoryLaptopStore(),
-			imageStore: imageStore,
-			code:       codes.OK,
+			name:   "success_with_id",
+			laptop: sample.NewLaptop(),
+			store:  service.NewInMemoryLaptopStore(),
+			code:   codes.OK,
 		},
 		{
-			name:       "success_no_id",
-			laptop:     laptopNoID,
-			store:      service.NewInMemoryLaptopStore(),
-			imageStore: imageStore,
-			code:       codes.OK,
+			name:   "success_no_id",
+			laptop: laptopNoID,
+			store:  service.NewInMemoryLaptopStore(),
+			code:   codes.OK,
 		},
 		{
-			name:       "failure_invalid_id",
-			laptop:     laptopInvalidID,
-			store:      service.NewInMemoryLaptopStore(),
-			imageStore: imageStore,
-			code:       codes.InvalidArgument,
+			name:   "failure_invalid_id",
+			laptop: laptopInvalidID,
+			store:  service.NewInMemoryLaptopStore(),
+			code:   codes.InvalidArgument,
 		},
 		{
-			name:       "failure_duplicate_id",
-			laptop:     laptopDuplicateID,
-			store:      storeDuplicateID,
-			imageStore: imageStore,
-			code:       codes.AlreadyExists,
+			name:   "failure_duplicate_id",
+			laptop: laptopDuplicateID,
+			store:  storeDuplicateID,
+			code:   codes.AlreadyExists,
 		},
 	}
 
@@ -75,7 +67,7 @@ func TestServerCreateLaptop(t *testing.T) {
 				Laptop: tc.laptop,
 			}
 
-			server := service.NewLaptopServer(tc.store, tc.imageStore)
+			server := service.NewLaptopServer(tc.store, nil, nil)
 
 			res, err := server.CreateLaptop(context.Background(), req)
 

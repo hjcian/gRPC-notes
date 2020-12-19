@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/hjcian/grpc-notes/pb"
@@ -171,6 +173,99 @@ func testUploadImage(client pb.LaptopServiceClient) {
 	uploadImage(client, laptop.GetId(), "tmp/laptop.jpeg")
 }
 
+func rateLaptop(
+	client pb.LaptopServiceClient,
+	laptopIDs []string,
+	scores []float64,
+) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stream, err := client.RateLaptop(ctx)
+	if err != nil {
+		return fmt.Errorf("cannot rate laptop: %v", err)
+	}
+
+	waitResponse := make(chan error)
+	// go routine to receive responses
+	go func() {
+		for {
+			res, err := stream.Recv()
+			if err == io.EOF {
+				log.Print("no more responses")
+				waitResponse <- nil
+				return
+			}
+			if err != nil {
+				waitResponse <- fmt.Errorf("cannot receive stream response: %v", err)
+				return
+			}
+
+			log.Print("received response: ", res)
+		}
+	}()
+
+	// send requests
+	for i, laptopID := range laptopIDs {
+		req := &pb.RateLaptopRequest{
+			LaptopId: laptopID,
+			Score:    scores[i],
+		}
+
+		err := stream.Send(req)
+		if err != nil {
+			return fmt.Errorf(
+				"cannot send stream request: %v - %v",
+				err,
+				stream.RecvMsg(nil),
+			)
+		}
+		log.Print("sent request: ", req)
+	}
+	err = stream.CloseSend()
+	if err != nil {
+		return fmt.Errorf("cannot close send: %v", err)
+	}
+
+	// block here to wait the waitResponse is filled by error or nil
+	err = <-waitResponse
+	return err
+}
+
+func testRateLaptop(client pb.LaptopServiceClient) {
+	n := 3
+	laptopIDs := make([]string, n)
+
+	for i := 0; i < n; i++ {
+		laptop := sample.NewLaptop()
+		laptopIDs[i] = laptop.GetId()
+		createLaptop(client, laptop)
+	}
+
+	scores := make([]float64, n)
+	for {
+		fmt.Print("rate laptop (y/n)? ")
+		var answer string
+		_, err := fmt.Scan(&answer)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if strings.ToLower(answer) != "y" {
+			break
+		}
+
+		for i := 0; i < n; i++ {
+			scores[i] = sample.RandomLaptopScore()
+		}
+
+		err = rateLaptop(client, laptopIDs, scores)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
 func main() {
 	serverAddr := flag.String("address", "", "the server address")
 	flag.Parse()
@@ -184,5 +279,6 @@ func main() {
 	client := pb.NewLaptopServiceClient(conn)
 	// testCreateLaptop(client)
 	// testSearchLaptop(client)
-	testUploadImage(client)
+	// testUploadImage(client)
+	testRateLaptop(client)
 }
